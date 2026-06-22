@@ -2,3 +2,4 @@
 __pycache__/
 .pytest_cache/
 postgres_data/
+.DS_Store
