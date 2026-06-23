@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import time
+import httpx
 from datetime import datetime, timezone
 
 # Set Page Config
@@ -52,10 +53,21 @@ st.markdown("""
 st.sidebar.markdown("### 🛡️ Adjudication Controls")
 st.sidebar.info("Adjust the parameters below to simulate different policy and risk conditions for the AI ingestion engine.")
 
-# Simulated backend connection status
-backend_url = "http://localhost:8000/"
+# Live connection check in the sidebar
+backend_url = "http://localhost:8000/api/v1/claims/analyze"
+base_url = "http://localhost:8000/"
+
+try:
+    response = httpx.get(base_url, timeout=1.5)
+    if response.status_code == 200:
+        backend_status = "🟢 Connected (Active)"
+    else:
+        backend_status = f"🟡 Degraded (Status: {response.status_code})"
+except Exception:
+    backend_status = "🔴 Offline (Using Demo Fallback Mode)"
+
 st.sidebar.markdown(f"**Backend Endpoint:** `{backend_url}`")
-st.sidebar.markdown("**Connection Status:** 🟢 Connected (Demo Mode)")
+st.sidebar.markdown(f"**Connection Status:** {backend_status}")
 
 # Simulation controls
 sim_policy_status = st.sidebar.selectbox(
@@ -104,162 +116,185 @@ with col1:
         run_pipeline = st.button("Run AI Ingestion Pipeline", type="primary")
         
         if run_pipeline:
-            # Simulate the multi-phase processing pipeline visually
+            # Simulate the multi-phase processing pipeline visually with live integration
             st.markdown("### ⚙️ Processing Sequence")
             
-            with st.spinner("1. Executing Asynchronous Tesseract OCR Parsing..."):
-                time.sleep(1.5)
-                st.write("✓ OCR Engine successfully extracted document layouts and text.")
-                
-            with st.spinner("2. Activating Gemini Structuring..."):
-                time.sleep(1.5)
-                st.write("✓ Gemini semantic analyzer structured raw OCR text into compliant JSON metadata.")
-                
-            with st.spinner("3. Validating Policy Boundaries..."):
-                time.sleep(1.5)
-                st.write("✓ Policy validation rules evaluated against active subscriber database schema.")
-                
-            with st.spinner("4. Running Risk & Fraud Detection Engines..."):
-                time.sleep(1.0)
-                st.write("✓ Risk assessment score calculated based on metadata flags.")
-                
-            with st.spinner("5. Performing Adjudication & Recommendation..."):
-                time.sleep(1.0)
-                st.success("🎉 Ingestion Pipeline execution completed.")
-                
-            st.markdown("---")
+            api_success = False
+            response_payload = {}
             
-            # Setup Tabbed Layout
-            tab1, tab2 = st.tabs(["📋 Structured Metadata", "🛡️ Risk & Adjudication Summary"])
+            with st.spinner("1. Uploading Document & Invoking Backend Analyze Route..."):
+                try:
+                    # Package the uploaded file data safely into a multipart form data dictionary
+                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                    
+                    # Make a live HTTP POST call to our running backend server
+                    res = httpx.post(backend_url, files=files, timeout=5.0)
+                    
+                    # Check status code
+                    if res.status_code == 202:
+                        response_payload = res.json()
+                        st.success(f"✓ Backend Response (202 Accepted): {response_payload.get('message')}")
+                        api_success = True
+                    else:
+                        st.error(f"❌ Backend Server Error (Status: {res.status_code}): {res.text}")
+                except Exception as e:
+                    st.error(f"❌ Connection Error: The backend engine server is currently offline or unreachable. "
+                             f"Please verify that the FastAPI backend is running on port 8000. Detail: {str(e)}")
             
-            # Adjudication calculations
-            is_policy_active = (sim_policy_status == "Active")
-            requested_amount = sim_billed_amount
-            allowed_amount = requested_amount
-            
-            # Policy Validation Output
-            if not is_policy_active:
-                validation_valid = False
-                validation_summary = f"Claim rejected: Policy is inactive (status: '{sim_policy_status.lower()}')."
-                allowed_amount = 0.0
-            elif requested_amount > sim_max_coverage:
-                validation_valid = True
-                allowed_amount = sim_max_coverage
-                validation_summary = f"Claim partially approved: Billed amount (${requested_amount:,.2f}) exceeds policy limits (max: ${sim_max_coverage:,.2f}). Capped at limit."
-            else:
-                validation_valid = True
-                validation_summary = f"Claim approved: Billed amount (${requested_amount:,.2f}) is within policy limits (max: ${sim_max_coverage:,.2f})."
-
-            # Fraud Detection Output
-            risk_score = 15
-            flags = []
-            if requested_amount > 50000:
-                risk_score += 40
-                flags.append("HIGH_VALUE_CLAIM")
-            
-            if sim_fraud_risk == "High":
-                risk_score = max(75, risk_score)
-                flags.append("SUSPECT_METADATA_ANOMALY")
-            elif sim_fraud_risk == "Medium":
-                risk_score = max(45, risk_score)
-                flags.append("REVIEW_TRIGGER_KEYWORD")
-            
-            risk_level = "LOW"
-            if risk_score >= 70:
-                risk_level = "HIGH"
-            elif risk_score >= 30:
-                risk_level = "MEDIUM"
-
-            # Final Recommendation Adjudication
-            if not validation_valid:
-                recommendation = "DENIED"
-                reason = f"Claim failed policy parameters: {validation_summary}"
-            elif risk_level == "HIGH":
-                recommendation = "FLAGGED"
-                reason = "Manual investigation required: High risk score and warning flags triggered."
-            elif risk_level == "MEDIUM":
-                recommendation = "FLAGGED"
-                reason = "Secondary review required: Medium risk score and caution flags triggered."
-            else:
-                recommendation = "APPROVED"
-                reason = f"Automated approval: {validation_summary}"
-
-            # Tab 1: Structured Metadata Display
-            with tab1:
-                st.markdown("#### 📄 Extracted Claim JSON Schema")
+            if api_success:
+                with st.spinner("2. Executing Asynchronous Tesseract OCR Parsing..."):
+                    time.sleep(1.0)
+                    st.write("✓ OCR Engine successfully extracted document layouts and text.")
+                    
+                with st.spinner("3. Activating Gemini Structuring..."):
+                    time.sleep(1.0)
+                    st.write("✓ Gemini semantic analyzer structured raw OCR text into compliant JSON metadata.")
+                    
+                with st.spinner("4. Validating Policy Boundaries..."):
+                    time.sleep(1.0)
+                    st.write("✓ Policy validation rules evaluated against active subscriber database schema.")
+                    
+                with st.spinner("5. Running Risk & Fraud Detection Engines..."):
+                    time.sleep(1.0)
+                    st.write("✓ Risk assessment score calculated based on metadata flags.")
+                    
+                with st.spinner("6. Performing Adjudication & Recommendation..."):
+                    time.sleep(1.0)
+                    st.success("🎉 Ingestion Pipeline execution completed.")
+                    
+                st.markdown("---")
                 
-                extracted_json = {
-                    "policy_number": "POL-99887766",
-                    "claim_number": "CLM-11223344",
-                    "customer_name": "Jane Doe",
-                    "total_billed_amount": requested_amount,
-                    "extracted_items": [
-                        {"description": "Outpatient clinic visit (CPT 99213)", "amount": min(requested_amount * 0.2, 250.0)},
-                        {"description": "Diagnostic laboratory panel", "amount": min(requested_amount * 0.48, 600.0)},
-                        {"description": "Therapeutic injection and supplies", "amount": min(requested_amount * 0.32, 400.0)}
-                    ]
-                }
+                # Setup Tabbed Layout
+                tab1, tab2 = st.tabs(["📋 Structured Metadata", "🛡️ Risk & Adjudication Summary"])
                 
-                # Show key parameters in metrics layout
-                m_col1, m_col2, m_col3 = st.columns(3)
-                with m_col1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Insured Customer</div>
-                        <div class="metric-value">Jane Doe</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with m_col2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Policy Number</div>
-                        <div class="metric-value">POL-99887766</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with m_col3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Total Claimed Value</div>
-                        <div class="metric-value">${requested_amount:,.2f}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Adjudication calculations
+                is_policy_active = (sim_policy_status == "Active")
+                requested_amount = sim_billed_amount
+                allowed_amount = requested_amount
                 
-                st.write("")
-                st.json(extracted_json)
-                
-                st.markdown("#### 📋 Extracted Line Items")
-                st.table(extracted_json["extracted_items"])
-
-            # Tab 2: Adjudication and Risk Display
-            with tab2:
-                st.markdown("#### ⚔️ Final Adjudication Adjudication Verdict")
-                
-                # Metric display
-                v_col1, v_col2, v_col3 = st.columns(3)
-                with v_col1:
-                    st.metric(label="Decision Action", value=recommendation)
-                with v_col2:
-                    st.metric(label="Billed vs. Allowed", value=f"${requested_amount:,.2f}", delta=f"${allowed_amount - requested_amount:,.2f}")
-                with v_col3:
-                    st.metric(label="Fraud Risk Level", value=f"{risk_level} ({risk_score}/100)")
-                
-                # Display action box
-                if recommendation == "APPROVED":
-                    st.success(f"✅ **CLAIM APPROVED**\n\n**Justification:** {reason}")
-                elif recommendation == "FLAGGED":
-                    st.warning(f"⚠️ **CLAIM FLAGGED FOR MANUAL REVIEW**\n\n**Justification:** {reason}")
+                # Policy Validation Output
+                if not is_policy_active:
+                    validation_valid = False
+                    validation_summary = f"Claim rejected: Policy is inactive (status: '{sim_policy_status.lower()}')."
+                    allowed_amount = 0.0
+                elif requested_amount > sim_max_coverage:
+                    validation_valid = True
+                    allowed_amount = sim_max_coverage
+                    validation_summary = f"Claim partially approved: Billed amount (${requested_amount:,.2f}) exceeds policy limits (max: ${sim_max_coverage:,.2f}). Capped at limit."
                 else:
-                    st.error(f"❌ **CLAIM DENIED**\n\n**Justification:** {reason}")
+                    validation_valid = True
+                    validation_summary = f"Claim approved: Billed amount (${requested_amount:,.2f}) is within policy limits (max: ${sim_max_coverage:,.2f})."
+
+                # Fraud Detection Output
+                risk_score = 15
+                flags = []
+                if requested_amount > 50000:
+                    risk_score += 40
+                    flags.append("HIGH_VALUE_CLAIM")
                 
-                # Flags table
-                st.markdown("#### 🚩 Triggered Security & Risk Flags")
-                if flags:
-                    for f in flags:
-                        st.markdown(f"- 🔴 **{f}**")
+                if sim_fraud_risk == "High":
+                    risk_score = max(75, risk_score)
+                    flags.append("SUSPECT_METADATA_ANOMALY")
+                elif sim_fraud_risk == "Medium":
+                    risk_score = max(45, risk_score)
+                    flags.append("REVIEW_TRIGGER_KEYWORD")
+                
+                risk_level = "LOW"
+                if risk_score >= 70:
+                    risk_level = "HIGH"
+                elif risk_score >= 30:
+                    risk_level = "MEDIUM"
+
+                # Final Recommendation Adjudication
+                if not validation_valid:
+                    recommendation = "DENIED"
+                    reason = f"Claim failed policy parameters: {validation_summary}"
+                elif risk_level == "HIGH":
+                    recommendation = "FLAGGED"
+                    reason = "Manual investigation required: High risk score and warning flags triggered."
+                elif risk_level == "MEDIUM":
+                    recommendation = "FLAGGED"
+                    reason = "Secondary review required: Medium risk score and caution flags triggered."
                 else:
-                    st.markdown("🟢 No warning or caution risk flags triggered.")
-                
-                st.caption(f"Auto Adjudicated on: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    recommendation = "APPROVED"
+                    reason = f"Automated approval: {validation_summary}"
+
+                # Tab 1: Structured Metadata Display
+                with tab1:
+                    st.markdown("#### 📄 Extracted Claim JSON Schema")
+                    
+                    extracted_json = {
+                        "policy_number": "POL-99887766",
+                        "claim_number": "CLM-11223344",
+                        "customer_name": "Jane Doe",
+                        "total_billed_amount": requested_amount,
+                        "extracted_items": [
+                            {"description": "Outpatient clinic visit (CPT 99213)", "amount": min(requested_amount * 0.2, 250.0)},
+                            {"description": "Diagnostic laboratory panel", "amount": min(requested_amount * 0.48, 600.0)},
+                            {"description": "Therapeutic injection and supplies", "amount": min(requested_amount * 0.32, 400.0)}
+                        ]
+                    }
+                    
+                    # Show key parameters in metrics layout
+                    m_col1, m_col2, m_col3 = st.columns(3)
+                    with m_col1:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Insured Customer</div>
+                            <div class="metric-value">Jane Doe</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with m_col2:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Policy Number</div>
+                            <div class="metric-value">POL-99887766</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with m_col3:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Total Claimed Value</div>
+                            <div class="metric-value">${requested_amount:,.2f}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.write("")
+                    st.json(extracted_json)
+                    
+                    st.markdown("#### 📋 Extracted Line Items")
+                    st.table(extracted_json["extracted_items"])
+
+                # Tab 2: Adjudication and Risk Display
+                with tab2:
+                    st.markdown("#### ⚔️ Final Adjudication Adjudication Verdict")
+                    
+                    # Metric display
+                    v_col1, v_col2, v_col3 = st.columns(3)
+                    with v_col1:
+                        st.metric(label="Decision Action", value=recommendation)
+                    with v_col2:
+                        st.metric(label="Billed vs. Allowed", value=f"${requested_amount:,.2f}", delta=f"${allowed_amount - requested_amount:,.2f}")
+                    with v_col3:
+                        st.metric(label="Fraud Risk Level", value=f"{risk_level} ({risk_score}/100)")
+                    
+                    # Display action box
+                    if recommendation == "APPROVED":
+                        st.success(f"✅ **CLAIM APPROVED**\n\n**Justification:** {reason}")
+                    elif recommendation == "FLAGGED":
+                        st.warning(f"⚠️ **CLAIM FLAGGED FOR MANUAL REVIEW**\n\n**Justification:** {reason}")
+                    else:
+                        st.error(f"❌ **CLAIM DENIED**\n\n**Justification:** {reason}")
+                    
+                    # Flags table
+                    st.markdown("#### 🚩 Triggered Security & Risk Flags")
+                    if flags:
+                        for f in flags:
+                            st.markdown(f"- 🔴 **{f}**")
+                    else:
+                        st.markdown("🟢 No warning or caution risk flags triggered.")
+                    
+                    st.caption(f"Auto Adjudicated on: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     else:
         st.info("💡 Please upload a claim document to begin the AI ingestion analysis.")
 
