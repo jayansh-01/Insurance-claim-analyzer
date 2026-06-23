@@ -10,6 +10,11 @@ from src.models.user import User
 from src.models.policy import Policy
 from src.models.claim import Claim
 
+# Import routers
+from src.api.v1.auth import router as auth_router
+from src.api.v1.policies import router as policy_router
+from src.api.v1.claims import router as claim_router
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn")
@@ -29,6 +34,11 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     lifespan=lifespan
 )
+
+# Include routers under global prefix /api/v1
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(policy_router, prefix="/api/v1")
+app.include_router(claim_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
