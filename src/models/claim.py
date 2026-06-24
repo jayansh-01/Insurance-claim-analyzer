@@ -5,7 +5,7 @@ from src.database.base import Base
 class Claim(Base):
     __tablename__ = "claims"
 
-    id = Column(Integer, primary key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     claim_number = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)

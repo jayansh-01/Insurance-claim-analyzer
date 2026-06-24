@@ -5,7 +5,7 @@ from src.database.base import Base
 class Policy(Base):
     __tablename__ = "policies"
 
-    id = Column(Integer, primary key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     policy_number = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     max_coverage_amount = Column(Float, nullable=False)

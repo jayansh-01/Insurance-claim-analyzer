@@ -127,8 +127,16 @@ with col1:
                     # Package the uploaded file data safely into a multipart form data dictionary
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
                     
+                    # Package sidebar parameter values to send to backend Forms
+                    data = {
+                        "policy_status": sim_policy_status,
+                        "max_coverage": str(sim_max_coverage),
+                        "fraud_risk": sim_fraud_risk,
+                        "billed_amount": str(sim_billed_amount)
+                    }
+                    
                     # Make a live HTTP POST call to our running backend server
-                    res = httpx.post(backend_url, files=files, timeout=5.0)
+                    res = httpx.post(backend_url, files=files, data=data, timeout=15.0)
                     
                     # Check status code
                     if res.status_code == 202:
@@ -167,73 +175,20 @@ with col1:
                 # Setup Tabbed Layout
                 tab1, tab2 = st.tabs(["📋 Structured Metadata", "🛡️ Risk & Adjudication Summary"])
                 
-                # Adjudication calculations
-                is_policy_active = (sim_policy_status == "Active")
-                requested_amount = sim_billed_amount
-                allowed_amount = requested_amount
+                # Extract results dynamically from the API response payload
+                extracted_data = response_payload.get("extracted_data", {})
+                validation_results = response_payload.get("validation_results", {})
+                fraud_results = response_payload.get("fraud_results", {})
+                recommendation = response_payload.get("recommendation", {})
                 
-                # Policy Validation Output
-                if not is_policy_active:
-                    validation_valid = False
-                    validation_summary = f"Claim rejected: Policy is inactive (status: '{sim_policy_status.lower()}')."
-                    allowed_amount = 0.0
-                elif requested_amount > sim_max_coverage:
-                    validation_valid = True
-                    allowed_amount = sim_max_coverage
-                    validation_summary = f"Claim partially approved: Billed amount (${requested_amount:,.2f}) exceeds policy limits (max: ${sim_max_coverage:,.2f}). Capped at limit."
-                else:
-                    validation_valid = True
-                    validation_summary = f"Claim approved: Billed amount (${requested_amount:,.2f}) is within policy limits (max: ${sim_max_coverage:,.2f})."
-
-                # Fraud Detection Output
-                risk_score = 15
-                flags = []
-                if requested_amount > 50000:
-                    risk_score += 40
-                    flags.append("HIGH_VALUE_CLAIM")
+                customer_name = extracted_data.get("customer_name", "Unknown")
+                policy_number = extracted_data.get("policy_number", "Unknown")
+                total_billed = extracted_data.get("total_billed_amount", 0.0)
+                extracted_items = extracted_data.get("extracted_items", [])
                 
-                if sim_fraud_risk == "High":
-                    risk_score = max(75, risk_score)
-                    flags.append("SUSPECT_METADATA_ANOMALY")
-                elif sim_fraud_risk == "Medium":
-                    risk_score = max(45, risk_score)
-                    flags.append("REVIEW_TRIGGER_KEYWORD")
-                
-                risk_level = "LOW"
-                if risk_score >= 70:
-                    risk_level = "HIGH"
-                elif risk_score >= 30:
-                    risk_level = "MEDIUM"
-
-                # Final Recommendation Adjudication
-                if not validation_valid:
-                    recommendation = "DENIED"
-                    reason = f"Claim failed policy parameters: {validation_summary}"
-                elif risk_level == "HIGH":
-                    recommendation = "FLAGGED"
-                    reason = "Manual investigation required: High risk score and warning flags triggered."
-                elif risk_level == "MEDIUM":
-                    recommendation = "FLAGGED"
-                    reason = "Secondary review required: Medium risk score and caution flags triggered."
-                else:
-                    recommendation = "APPROVED"
-                    reason = f"Automated approval: {validation_summary}"
-
                 # Tab 1: Structured Metadata Display
                 with tab1:
                     st.markdown("#### 📄 Extracted Claim JSON Schema")
-                    
-                    extracted_json = {
-                        "policy_number": "POL-99887766",
-                        "claim_number": "CLM-11223344",
-                        "customer_name": "Jane Doe",
-                        "total_billed_amount": requested_amount,
-                        "extracted_items": [
-                            {"description": "Outpatient clinic visit (CPT 99213)", "amount": min(requested_amount * 0.2, 250.0)},
-                            {"description": "Diagnostic laboratory panel", "amount": min(requested_amount * 0.48, 600.0)},
-                            {"description": "Therapeutic injection and supplies", "amount": min(requested_amount * 0.32, 400.0)}
-                        ]
-                    }
                     
                     # Show key parameters in metrics layout
                     m_col1, m_col2, m_col3 = st.columns(3)
@@ -241,50 +196,65 @@ with col1:
                         st.markdown(f"""
                         <div class="metric-card">
                             <div class="metric-label">Insured Customer</div>
-                            <div class="metric-value">Jane Doe</div>
+                            <div class="metric-value">{customer_name}</div>
                         </div>
                         """, unsafe_allow_html=True)
                     with m_col2:
                         st.markdown(f"""
                         <div class="metric-card">
                             <div class="metric-label">Policy Number</div>
-                            <div class="metric-value">POL-99887766</div>
+                            <div class="metric-value">{policy_number}</div>
                         </div>
                         """, unsafe_allow_html=True)
                     with m_col3:
                         st.markdown(f"""
                         <div class="metric-card">
                             <div class="metric-label">Total Claimed Value</div>
-                            <div class="metric-value">${requested_amount:,.2f}</div>
+                            <div class="metric-value">${total_billed:,.2f}</div>
                         </div>
                         """, unsafe_allow_html=True)
                     
                     st.write("")
-                    st.json(extracted_json)
+                    st.json(extracted_data)
                     
                     st.markdown("#### 📋 Extracted Line Items")
-                    st.table(extracted_json["extracted_items"])
+                    if extracted_items:
+                        st.table(extracted_items)
+                    else:
+                        st.write("No line items extracted.")
 
                 # Tab 2: Adjudication and Risk Display
                 with tab2:
                     st.markdown("#### ⚔️ Final Adjudication Adjudication Verdict")
                     
+                    rec_action = recommendation.get("recommended_action", "FLAGGED")
+                    justification = recommendation.get("justification_reason", "No justification provided.")
+                    adjudicated_at = recommendation.get("auto_adjudicated_at", "N/A")
+                    
+                    requested_amount = validation_results.get("requested_amount", 0.0)
+                    allowed_amount = validation_results.get("allowed_amount", 0.0)
+                    delta_amount = allowed_amount - requested_amount
+                    
+                    risk_level = fraud_results.get("risk_level", "LOW")
+                    risk_score = fraud_results.get("risk_score", 0)
+                    flags = fraud_results.get("flags_triggered", [])
+                    
                     # Metric display
                     v_col1, v_col2, v_col3 = st.columns(3)
                     with v_col1:
-                        st.metric(label="Decision Action", value=recommendation)
+                        st.metric(label="Decision Action", value=rec_action)
                     with v_col2:
-                        st.metric(label="Billed vs. Allowed", value=f"${requested_amount:,.2f}", delta=f"${allowed_amount - requested_amount:,.2f}")
+                        st.metric(label="Billed vs. Allowed", value=f"${allowed_amount:,.2f}", delta=f"${delta_amount:,.2f}")
                     with v_col3:
                         st.metric(label="Fraud Risk Level", value=f"{risk_level} ({risk_score}/100)")
                     
                     # Display action box
-                    if recommendation == "APPROVED":
-                        st.success(f"✅ **CLAIM APPROVED**\n\n**Justification:** {reason}")
-                    elif recommendation == "FLAGGED":
-                        st.warning(f"⚠️ **CLAIM FLAGGED FOR MANUAL REVIEW**\n\n**Justification:** {reason}")
+                    if rec_action == "APPROVED":
+                        st.success(f"✅ **CLAIM APPROVED**\n\n**Justification:** {justification}")
+                    elif rec_action == "FLAGGED":
+                        st.warning(f"⚠️ **CLAIM FLAGGED FOR MANUAL REVIEW**\n\n**Justification:** {justification}")
                     else:
-                        st.error(f"❌ **CLAIM DENIED**\n\n**Justification:** {reason}")
+                        st.error(f"❌ **CLAIM DENIED**\n\n**Justification:** {justification}")
                     
                     # Flags table
                     st.markdown("#### 🚩 Triggered Security & Risk Flags")
@@ -294,7 +264,7 @@ with col1:
                     else:
                         st.markdown("🟢 No warning or caution risk flags triggered.")
                     
-                    st.caption(f"Auto Adjudicated on: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    st.caption(f"Auto Adjudicated on: {adjudicated_at}")
     else:
         st.info("💡 Please upload a claim document to begin the AI ingestion analysis.")
 

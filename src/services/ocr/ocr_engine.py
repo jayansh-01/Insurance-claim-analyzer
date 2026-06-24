@@ -47,7 +47,7 @@ class OCREngineService:
                 f"Document Name: {file_name}\n"
                 "Document Type: Health Insurance Claim Invoice\n"
                 "Policy Number: POL-99887766\n"
-                "Insured Customer: Jane Doe\n"
+                "Insured Customer: Jayansh Kumar\n"
                 "Provider Name: Apex Health Clinic\n"
                 "Date of Service: 2026-06-15\n"
                 "Total Billed Amount: $1250.00\n"

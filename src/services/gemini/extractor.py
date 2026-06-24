@@ -80,7 +80,7 @@ class GeminiExtractorService:
             mock_data = {
                 "policy_number": "POL-99887766",
                 "claim_number": "CLM-11223344",
-                "customer_name": "Jane Doe",
+                "customer_name": "Jayansh Kumar",
                 "total_billed_amount": 1250.00,
                 "extracted_items": [
                     {"description": "Outpatient clinic visit (CPT 99213)", "amount": 250.00},
