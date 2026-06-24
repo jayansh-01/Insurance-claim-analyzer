@@ -22,6 +22,8 @@ class GeminiExtractorService:
         system_prompt = (
             "You are an expert AI system specialized in medical billing and insurance claims. "
             "Analyze the provided raw OCR text and extract key details. "
+            "Do not use placeholder data, do not autocorrect spelling anomalies, and do not fall back on pre-set financial amounts. "
+            "You must parse the exact, literal names, numbers, line items, and dollar figures found directly within the provided raw OCR text strings, even if they contain typos or high amounts.\n"
             "You must output ONLY a valid JSON structure. Do NOT include any markdown code blocks, "
             "no ```json, and no extra text. Just the raw JSON object.\n"
             "The JSON structure must contain exactly these keys:\n"
